@@ -19,39 +19,42 @@ n_exp = 50;
 P_own_A = 0:1/(n_exp-1):1;
 P_own_B = 0:1/(n_exp-1):1;
 
-TOPLOT = 0;
+TOPLOT = 0; % plot each experiment
 mean_joint_reward	= zeros(n_exp,n_exp);
 R_A			= zeros(n_exp,n_exp);
 R_B			= zeros(n_exp,n_exp);
 
 for e1 = 1:n_exp,
-	parfor e2 = 1:n_exp,
-		[mean_joint_reward(e1,e2), mean_R_A(e1,e2), mean_R_B(e1,e2), O_A, O_B, R_A, R_B] = testsim_bos_one_exp(n_trials,P_own_A(e1),P_own_B(e2),PA,PB,TOPLOT);
+	for e2 = 1:n_exp,
+		[mean_joint_reward(e1,e2), mean_R_A(e1,e2), mean_R_B(e1,e2), O_A, O_B, R_A, R_B] = scpsim_bos_one_exp(n_trials,P_own_A(e1),P_own_B(e2),PA,PB,TOPLOT);
 	end
 end
 
-figure;
+% figure;
 % plot(P_own_A,mean_joint_reward,'k.:');
 % xlabel('prob_{own}');
 % ylabel('mean joint reward');
 
-
-pcolor(P_own_A,P_own_B,mean_joint_reward);
+figure;
+pcolor(P_own_A,P_own_B,mean_joint_reward');
 xlabel('P_{A own}');
 ylabel('P_{B own}');
 title('Mean joint reward')
 axis equal
 axis square
+colorbar
 
 figure;
-pcolor(P_own_A,P_own_B,mean_R_A-mean_R_B);
+pcolor(P_own_A,P_own_B,(mean_R_A-mean_R_B)');
 xlabel('P_{A own}');
 ylabel('P_{B own}');
 title('mean reward A - mean reward B')
 axis equal
 axis square
+colorbar
 
-function [mean_joint_reward, mean_R_A, mean_R_B, O_A, O_B, R_A, R_B] = testsim_bos_one_exp(n_trials,P_own_A,P_own_B,PA,PB,TOPLOT)
+
+function [mean_joint_reward, mean_R_A, mean_R_B, O_A, O_B, R_A, R_B] = scpsim_bos_one_exp(n_trials,P_own_A,P_own_B,PA,PB,TOPLOT)
 % run one experiment/session of BoS
 
 
@@ -66,9 +69,10 @@ mean_joint_reward = mean((R_A + R_B)/2);
 mean_R_A = mean(R_A);
 mean_R_B = mean(R_B);
 
+
 if TOPLOT,
 	figure('Position',[100 100 1400 800]);
-	subplot(2,1,1);
+	% subplot(2,1,1);
 	
 	plot(R_A,'r:'); hold on
 	plot(R_B,'b:');
@@ -76,6 +80,10 @@ if TOPLOT,
 	
 	line([1 n_trials],[mean_joint_reward mean_joint_reward],'Color',[0.5 0 0.5],'LineWidth',2);
 	set(gca,'Ylim',[0.9 4.1]);
+    title(sprintf('P_{own} A = %.2f, P_{own} B = %.2f',P_own_A,P_own_B ));
+    
+    pause;
+    
 end
 
 
