@@ -1,4 +1,4 @@
-n_trials = 200;
+n_trials = 1000;
 
 DA = randsample([1:0.5:3],n_trials,true);
 DB = randsample([1:0.5:3],n_trials,true);
@@ -21,3 +21,7 @@ hist(D1_A)
 subplot(4,1,4)
 D2_A = DA-DB;
 hist(D2_A)
+
+
+figure
+plot(D1,D2,'o');
