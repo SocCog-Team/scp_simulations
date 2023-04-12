@@ -3,7 +3,7 @@ function scpsim_bos
 
 % matlabpool(4); % use only once to open the parallel pool
 
-n_trials = 10000;
+n_trials = 1000;
 
 P_own_A = 0.8;
 P_own_B = 0.8;
@@ -30,10 +30,10 @@ for e1 = 1:n_exp,
 	end
 end
 
-% figure;
-% plot(P_own_A,mean_joint_reward,'k.:');
-% xlabel('prob_{own}');
-% ylabel('mean joint reward');
+figure;
+plot(P_own_A,mean_joint_reward,'k.:');
+xlabel('prob_{own}');
+ylabel('mean joint reward');
 
 figure;
 pcolor(P_own_A,P_own_B,mean_joint_reward');
