@@ -1,5 +1,5 @@
-addpath /Users/fschneider/Documents/GitHub/CPR/Matlab/PSY_Setup/random_walk
-addpath /Users/fschneider/Documents/MATLAB/CircStat2012a/
+% addpath /Users/fschneider/Documents/GitHub/CPR/Matlab/PSY_Setup/random_walk
+% addpath /Users/fschneider/Documents/MATLAB/CircStat2012a/
 
 close all
 clear all
