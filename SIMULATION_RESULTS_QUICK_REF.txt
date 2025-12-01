@@ -1,0 +1,125 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                CPR WAGERING SIMULATION - QUICK REFERENCE                 ║
+║                        Main Result Summary                               ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ YOUR QUESTION: Is fixed tilt as good as variable tilt?                  │
+└──────────────────────────────────────────────────────────────────────────┘
+
+ANSWER: With current linear reward, properly-scaled variable tilt is 28% 
+        better, but fixed medium tilt is surprisingly competitive.
+
+═══════════════════════════════════════════════════════════════════════════
+
+STRATEGY PERFORMANCE (Linear Reward: reward = tilt if hit)
+
+Strategy                 Reward Rate    Notes
+──────────────────────────────────────────────────────────────────────────
+Fixed Low (0.2)          0.0532/s      Many hits, small rewards
+Fixed Medium (0.5)       0.0711/s      ⭐ BEST FIXED - Balanced approach
+Fixed High (0.8)         0.0000/s      No hits, arc too narrow
+
+Coherence Linear (0→1)   0.0041/s      ❌ FAILS - Naive scaling
+Coherence Scaled (0.2→6) 0.0911/s      ✅ BEST OVERALL - Smart scaling
+Match Accuracy           0.0000/s      ❌ FAILS - Requires perfect timing
+
+                    ADAPTIVE ADVANTAGE: +28.3%
+
+═══════════════════════════════════════════════════════════════════════════
+
+REWARD FORMULATION COMPARISON
+
+Formulation         Fixed Best   Adaptive Best   Advantage   Recommendation
+──────────────────────────────────────────────────────────────────────────
+Quadratic           0.0352/s     0.0510/s        +44.8%     ⭐⭐ BEST
+Miss Penalty        0.0531/s     0.0746/s        +40.3%     ⭐⭐ EXCELLENT
+Exponential         0.0380/s     0.0525/s        +38.2%     ⭐⭐ EXCELLENT
+Accuracy Bonus      0.1011/s     0.1304/s        +28.9%     ⭐ GOOD
+Linear (current)    0.0711/s     0.0911/s        +28.3%     ⭐ ACCEPTABLE
+Square Root         0.1194/s     0.1242/s        +4.0%      ❌ WEAK
+
+═══════════════════════════════════════════════════════════════════════════
+
+KEY INSIGHT: THE "GOLDILOCKS ZONE"
+
+Arc Width by Tilt:
+  tilt = 0.0  →  arc = 180°  (too wide, low reward per hit)
+  tilt = 0.2  →  arc = 146°  (wide, safer)
+  tilt = 0.5  →  arc = 95°   ⭐ SWEET SPOT
+  tilt = 0.6  →  arc = 78°   (good for high coherence)
+  tilt = 0.8  →  arc = 44°   (too narrow, no hits)
+  tilt = 1.0  →  arc = 10°   (impossible except perfect)
+
+Optimal tilt range: 0.2 to 0.6
+
+═══════════════════════════════════════════════════════════════════════════
+
+WHY FIXED TILT WORKS SO WELL
+
+At tilt = 0.5:
+  • Hit rate: 28%
+  • Reward per hit: 0.5
+  • Product: 0.14 per trial
+  • Rate: 0.07/s
+
+This is 78% as good as optimal adaptive strategy!
+
+═══════════════════════════════════════════════════════════════════════════
+
+RECOMMENDATIONS
+
+┌─ IF YOU WANT MINIMAL CHANGES ─────────────────────────────────────────┐
+│ Keep linear reward but add training:                                  │
+│   • Restrict initial tilt range to [0.2, 0.6]                        │
+│   • Show coherence level as visual cue                               │
+│   • Shape toward coherence-dependent behavior                        │
+│   Expected outcome: 28% improvement possible                         │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌─ IF YOU WANT OPTIMAL PERFORMANCE ─────────────────────────────────────┐
+│ Switch to QUADRATIC reward: reward = tilt²                           │
+│   • Creates 45% advantage for adaptive wagering                      │
+│   • Stronger learning gradient                                       │
+│   • Natural incentive to modulate with coherence                     │
+│   Expected outcome: Monkey will learn to vary tilt                   │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌─ IF YOU WANT TO PREVENT "LAZINESS" ───────────────────────────────────┐
+│ Add MISS PENALTY: reward = tilt (hit) or -0.05 (miss)               │
+│   • Creates 40% advantage for adaptive wagering                      │
+│   • Punishes overconfident wide arcs                                 │
+│   • Forces monkey to optimize                                        │
+│   Expected outcome: Active strategy selection                        │
+└───────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════
+
+BOTTOM LINE
+
+Your intuition was CORRECT:
+  ✓ Fixed tilt CAN work (gives 78% of optimal)
+  ✓ Large rewards rarely ≈ small rewards often (at fixed 0.5)
+  ✓ Monkey might not discover adaptive benefit naturally
+
+BUT there IS incentive for adaptive behavior:
+  ✓ 28% improvement with current reward (if smart scaling)
+  ✓ 45% improvement with quadratic reward
+  ✓ Clear advantage for coherence-dependent wagering
+
+Action: Consider switching to quadratic reward for clearer learning signal
+
+═══════════════════════════════════════════════════════════════════════════
+
+TO RUN SIMULATION:
+  >> scpsim_cpr_simulations_cursor
+
+TO CUSTOMIZE:
+  Edit CONFIG section at top of scpsim_cpr_simulations_cursor.m
+
+DETAILED RESULTS:
+  See: cpr_simulation_results.txt (auto-generated)
+       CPR_RESULTS_SUMMARY.md (comprehensive analysis)
+       
+═══════════════════════════════════════════════════════════════════════════
+

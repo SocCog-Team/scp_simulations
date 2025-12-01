@@ -1,0 +1,135 @@
+PART 1: Psychometric Function Analysis
+─────────────────────────────────────────────────────────────────
+  Coherence | Mean Accuracy | Std Accuracy | Angular Error (deg)
+  ----------|---------------|--------------|--------------------
+         0% |         0.333 |        0.150 |              120.0
+        38% |         0.518 |        0.093 |               86.8
+        59% |         0.662 |        0.061 |               60.8
+        98% |         0.860 |        0.003 |               25.1
+
+
+PART 2: Strategy Performance Across Reward Formulations
+─────────────────────────────────────────────────────────────────
+
+Linear (current)
+────────────────
+  Strategy             | Hit Rate | Reward/Trial | Rate (/s) | Mean Tilt
+  ---------------------|----------|--------------|-----------|----------
+  Fixed Low (0.2)      |    0.532 |       0.1064 |    0.0532 |     0.200
+  Fixed Med (0.5)      |    0.284 |       0.1421 |    0.0711 |     0.500
+  Fixed High (0.8)     |    0.000 |       0.0000 |    0.0000 |     0.800
+  Coherence Linear     |    0.053 |       0.0081 |    0.0041 |     0.487
+  Coherence Scaled     |    0.338 |       0.1823 |    0.0911 |     0.395
+  Match Accuracy       |    0.000 |       0.0000 |    0.0000 |     0.594
+  → Adaptive advantage: 28.26%
+
+Quadratic
+─────────
+  Strategy             | Hit Rate | Reward/Trial | Rate (/s) | Mean Tilt
+  ---------------------|----------|--------------|-----------|----------
+  Fixed Low (0.2)      |    0.530 |       0.0212 |    0.0106 |     0.200
+  Fixed Med (0.5)      |    0.282 |       0.0704 |    0.0352 |     0.500
+  Fixed High (0.8)     |    0.000 |       0.0001 |    0.0000 |     0.800
+  Coherence Linear     |    0.055 |       0.0036 |    0.0018 |     0.487
+  Coherence Scaled     |    0.342 |       0.1020 |    0.0510 |     0.395
+  Match Accuracy       |    0.000 |       0.0000 |    0.0000 |     0.592
+  → Adaptive advantage: 44.83%
+
+Square Root
+───────────
+  Strategy             | Hit Rate | Reward/Trial | Rate (/s) | Mean Tilt
+  ---------------------|----------|--------------|-----------|----------
+  Fixed Low (0.2)      |    0.534 |       0.2389 |    0.1194 |     0.200
+  Fixed Med (0.5)      |    0.281 |       0.1985 |    0.0992 |     0.500
+  Fixed High (0.8)     |    0.000 |       0.0000 |    0.0000 |     0.800
+  Coherence Linear     |    0.052 |       0.0111 |    0.0056 |     0.487
+  Coherence Scaled     |    0.341 |       0.2484 |    0.1242 |     0.395
+  Match Accuracy       |    0.000 |       0.0000 |    0.0000 |     0.593
+  → Adaptive advantage: 4.00%
+
+Exponential (k=2)
+─────────────────
+  Strategy             | Hit Rate | Reward/Trial | Rate (/s) | Mean Tilt
+  ---------------------|----------|--------------|-----------|----------
+  Fixed Low (0.2)      |    0.529 |       0.0407 |    0.0203 |     0.200
+  Fixed Med (0.5)      |    0.282 |       0.0760 |    0.0380 |     0.500
+  Fixed High (0.8)     |    0.000 |       0.0001 |    0.0000 |     0.800
+  Coherence Linear     |    0.053 |       0.0036 |    0.0018 |     0.487
+  Coherence Scaled     |    0.338 |       0.1050 |    0.0525 |     0.395
+  Match Accuracy       |    0.000 |       0.0000 |    0.0000 |     0.593
+  → Adaptive advantage: 38.20%
+
+Accuracy Bonus
+──────────────
+  Strategy             | Hit Rate | Reward/Trial | Rate (/s) | Mean Tilt
+  ---------------------|----------|--------------|-----------|----------
+  Fixed Low (0.2)      |    0.530 |       0.1463 |    0.0731 |     0.200
+  Fixed Med (0.5)      |    0.284 |       0.2022 |    0.1011 |     0.500
+  Fixed High (0.8)     |    0.000 |       0.0000 |    0.0000 |     0.800
+  Coherence Linear     |    0.050 |       0.0094 |    0.0047 |     0.487
+  Coherence Scaled     |    0.344 |       0.2607 |    0.1304 |     0.395
+  Match Accuracy       |    0.000 |       0.0000 |    0.0000 |     0.593
+  → Adaptive advantage: 28.93%
+
+Miss Penalty
+────────────
+  Strategy             | Hit Rate | Reward/Trial | Rate (/s) | Mean Tilt
+  ---------------------|----------|--------------|-----------|----------
+  Fixed Low (0.2)      |    0.528 |       0.0819 |    0.0409 |     0.200
+  Fixed Med (0.5)      |    0.284 |       0.1063 |    0.0531 |     0.500
+  Fixed High (0.8)     |    0.000 |      -0.0500 |   -0.0250 |     0.800
+  Coherence Linear     |    0.052 |      -0.0399 |   -0.0199 |     0.487
+  Coherence Scaled     |    0.338 |       0.1491 |    0.0746 |     0.395
+  Match Accuracy       |    0.000 |      -0.0500 |   -0.0250 |     0.593
+  → Adaptive advantage: 40.28%
+
+Threshold Bonus
+───────────────
+  Strategy             | Hit Rate | Reward/Trial | Rate (/s) | Mean Tilt
+  ---------------------|----------|--------------|-----------|----------
+  Fixed Low (0.2)      |    0.532 |       0.1065 |    0.0532 |     0.200
+  Fixed Med (0.5)      |    0.283 |       0.1413 |    0.0706 |     0.500
+  Fixed High (0.8)     |    0.000 |       0.0000 |    0.0000 |     0.800
+  Coherence Linear     |    0.055 |       0.0082 |    0.0041 |     0.487
+  Coherence Scaled     |    0.337 |       0.1816 |    0.0908 |     0.395
+  Match Accuracy       |    0.000 |       0.0000 |    0.0000 |     0.594
+  → Adaptive advantage: 28.55%
+
+
+SUMMARY: Reward Formulation Rankings
+═════════════════════════════════════════════════════════════════
+  Rank | Formulation               | Adaptive Advantage
+  -----|---------------------------|-------------------
+     1 | Quadratic                 |             44.83%
+     2 | Miss Penalty              |             40.28%
+     3 | Exponential (k=2)         |             38.20%
+     4 | Accuracy Bonus            |             28.93%
+     5 | Threshold Bonus           |             28.55%
+     6 | Linear (current)          |             28.26%
+     7 | Square Root               |              4.00%
+
+
+PART 3: Key Insights
+─────────────────────────────────────────────────────────────────
+
+┌─────────────────────────────────────────────────────────────┐
+│ INSIGHTS & RECOMMENDATIONS                                  │
+└─────────────────────────────────────────────────────────────┘
+
+Current formulation (Linear):
+  Adaptive advantage: 28.26%
+  ✓ GOOD: Sufficient incentive for adaptive wagering
+
+Best formulation: Quadratic
+  Adaptive advantage: 44.83%
+  Improvement over current: 16.57%
+
+Recommendation: CURRENT FORMULATION ACCEPTABLE
+  Sufficient incentive for coherence-dependent wagering.
+
+Alternative formulations with >15% advantage: 6
+Alternative formulations with 5-15% advantage: 0
+
+
+PART 4: Generating Visualizations
+─────────────────────────────────────────────────────────────────
