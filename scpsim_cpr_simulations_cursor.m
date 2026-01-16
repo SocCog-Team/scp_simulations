@@ -36,7 +36,7 @@ function scpsim_cpr_simulations_cursor
 CONFIG.coherence_levels = [0 36 59 98];
 
 % --- Task Parameters ---
-CONFIG.n_trials_per_coherence = 200;
+CONFIG.n_trials_per_coherence = 500;
 CONFIG.targets_per_second = 0.5;
 
 % --- Arc Width Mapping ---
@@ -60,9 +60,14 @@ CONFIG.strategy.coherence_dependent.tilt_min = 0.1;  % Tilt at 0% coherence
 CONFIG.strategy.coherence_dependent.tilt_max = 0.6;  % Tilt at 100% coherence
 CONFIG.strategy.coherence_dependent.noise_std = 0.1;  % Gaussian noise standard deviation
 
-% Adaptive wagering: scales tilt with trial-by-trial accuracy
-CONFIG.strategy.adaptive_wagering.noise_std = 0.1;   % Gaussian noise standard deviation
-CONFIG.strategy.adaptive_wagering.accuracy_scaling = 1.0;  % Scaling factor for tilt based on accuracy 
+% Adaptive wagering per coherence: scales tilt with trial-by-trial accuracy
+CONFIG.strategy.adaptive_wagering_per_coherence.noise_std = 0.1;   % Gaussian noise standard deviation for scaling tilt with accuracy
+CONFIG.strategy.adaptive_wagering_per_coherence.accuracy_scaling = 1.0;  % Scaling factor for tilt based on accuracy 
+
+% Adaptive wagering: scales tilt with trial-by-trial accuracy regardless of coherence
+CONFIG.strategy.adaptive_wagering.tilt_min = 0.01;  % Tilt at minimal accuracy
+CONFIG.strategy.adaptive_wagering.tilt_max = 0.7;  % Tilt at maximal accuracy
+CONFIG.strategy.adaptive_wagering.noise_std = 0.1;   % Gaussian noise standard deviation for scaling tilt with accuracy
 
 % Fixed tilt strategies to test
 CONFIG.strategy.fixed_tilts = [0.2, 0.4, 0.6, 0.8];
@@ -87,12 +92,15 @@ CONFIG.strategies{end, 2} = @(coh, acc, mean_acc, cfg) compute_coherence_tilt(co
 CONFIG.strategies{end+1, 1} = 'Adaptive Wagering';
 CONFIG.strategies{end, 2} = @(coh, acc, mean_acc, cfg) compute_adaptive_tilt(coh, acc, mean_acc, cfg);
 
+CONFIG.strategies{end+1, 1} = 'Accuracy Scaled';
+CONFIG.strategies{end, 2} = @(coh, acc, mean_acc, cfg) compute_accuracy_scaled_tilt(coh, acc, mean_acc, cfg);
+
 % --- Reward Formulations to Test ---
 % Each formulation: reward = f(tilt, hit, accuracy, CONFIG)
 CONFIG.reward_formulations = {
-    'Linear',               @(tilt, hit, acc, cfg) scale_reward(hit .* tilt, cfg);
+    'Linear',               @(tilt, hit, acc, cfg) hit .* scale_reward(tilt, cfg);
     % To add more formulations, uncomment and add below:
-    % 'Quadratic',            @(tilt, hit, acc, cfg) scale_reward(hit .* (tilt.^2), cfg);
+    'Quadratic',            @(tilt, hit, acc, cfg) hit .* scale_reward(tilt.^2, cfg);
     % 'Square Root',          @(tilt, hit, acc, cfg) scale_reward(hit .* sqrt(tilt), cfg);
 };
 
@@ -106,7 +114,7 @@ CONFIG.results_filename = 'cpr_simulation_results.txt';
 %  ========================================================================
 
 % Set random seed for reproducibility
-% rng(42, 'twister');
+rng(42, 'twister');
 
 fprintf('\n');
 fprintf('╔════════════════════════════════════════════════════════════════╗\n');
@@ -185,6 +193,9 @@ if CONFIG.show_figures
     
     create_figure3_accuracy_tilt_scatter(CONFIG, accuracy_data, simulation_results);
     fprintf('  ✓ Figure 3: Accuracy vs Tilt Scatter Plots by Coherence\n');
+    
+    create_figure4_reward_functions(CONFIG);
+    fprintf('  ✓ Figure 4: Reward Functions\n');
 end
 
 %% Finalize
@@ -242,6 +253,14 @@ mean_accuracies = zeros(n_coherence, 1);
 for c = 1:n_coherence
     mean_accuracies(c) = mean(accuracy_data{c});
 end
+
+% Pre-compute global min/max accuracy across all trials (needed for accuracy-scaled strategy)
+all_accuracies = [];
+for c = 1:n_coherence
+    all_accuracies = [all_accuracies; accuracy_data{c}];
+end
+CONFIG.global_accuracy_min = min(all_accuracies);
+CONFIG.global_accuracy_max = max(all_accuracies);
 
 % Initialize results structure
 simulation_results = struct();
@@ -330,6 +349,7 @@ end
 
 function tilt = compute_adaptive_tilt(coherence, accuracy, mean_accuracy, CONFIG)
 % Compute adaptive tilt: centered around coherence-dependent tilt, scaled with accuracy
+% Maps accuracy from [global_min, global_max] to [tilt_min, tilt_max] linearly
 % Tilt SD matches coherence-based strategy SD
 % Handles both scalar and vector inputs for accuracy
 
@@ -337,18 +357,28 @@ function tilt = compute_adaptive_tilt(coherence, accuracy, mean_accuracy, CONFIG
 tilt_base = CONFIG.strategy.coherence_dependent.tilt_min + ...
     (CONFIG.strategy.coherence_dependent.tilt_max - CONFIG.strategy.coherence_dependent.tilt_min) * (coherence / 100);
 
-% Scale with accuracy deviation from mean
-accuracy_deviation = accuracy - mean_accuracy;
-accuracy_modulation = CONFIG.strategy.adaptive_wagering.accuracy_scaling * accuracy_deviation;
+% Map accuracy from [global_min, global_max] to [tilt_min, tilt_max]
+acc_range = CONFIG.global_accuracy_max - CONFIG.global_accuracy_min;
+if acc_range > 0
+    % Linear mapping: accuracy -> tilt
+    normalized_acc = (accuracy - CONFIG.global_accuracy_min) / acc_range;
+    tilt_from_accuracy = CONFIG.strategy.adaptive_wagering.tilt_min + ...
+        (CONFIG.strategy.adaptive_wagering.tilt_max - CONFIG.strategy.adaptive_wagering.tilt_min) * normalized_acc;
+else
+    % If all accuracies are the same, use mean of tilt range
+    tilt_from_accuracy = ones(size(accuracy)) * ...
+        (CONFIG.strategy.adaptive_wagering.tilt_min + CONFIG.strategy.adaptive_wagering.tilt_max) / 2;
+end
+
+% Center around coherence-dependent tilt: use accuracy-based tilt but adjust mean to match tilt_base
+tilt_mean_from_accuracy = mean(tilt_from_accuracy);
+tilt = tilt_base + (tilt_from_accuracy - tilt_mean_from_accuracy);
 
 % Add noise (vectorized if accuracy is a vector)
 noise = randn(size(accuracy)) * CONFIG.strategy.adaptive_wagering.noise_std;
-
-% Combine: tilt = tilt_base + accuracy_modulation + noise
-tilt = tilt_base + accuracy_modulation + noise;
+tilt = tilt + noise;
 
 % Normalize tilt distribution to match target SD
-% First, ensure mean is at tilt_base (accuracy modulation should average to 0, but noise might shift it)
 target_sd = CONFIG.strategy.coherence_dependent.noise_std;
 current_mean = mean(tilt);
 current_sd = std(tilt);
@@ -359,6 +389,34 @@ if current_sd > 0
 else
     tilt = tilt_base + (tilt - current_mean);
 end
+
+% Clip to valid range
+tilt = max(0, min(1, tilt));
+
+end
+
+function tilt = compute_accuracy_scaled_tilt(coherence, accuracy, mean_accuracy, CONFIG)
+% Compute tilt scaled directly with accuracy, regardless of coherence
+% Maps accuracy from [global_min, global_max] to [tilt_min, tilt_max]
+% Uses CONFIG.strategy.adaptive_wagering parameters
+% Handles both scalar and vector inputs for accuracy
+
+% Map accuracy from [global_min, global_max] to [tilt_min, tilt_max]
+acc_range = CONFIG.global_accuracy_max - CONFIG.global_accuracy_min;
+if acc_range > 0
+    % Linear mapping: accuracy -> tilt
+    normalized_acc = (accuracy - CONFIG.global_accuracy_min) / acc_range;
+    tilt = CONFIG.strategy.adaptive_wagering.tilt_min + ...
+        (CONFIG.strategy.adaptive_wagering.tilt_max - CONFIG.strategy.adaptive_wagering.tilt_min) * normalized_acc;
+else
+    % If all accuracies are the same, use mean of tilt range
+    tilt_mean = (CONFIG.strategy.adaptive_wagering.tilt_min + CONFIG.strategy.adaptive_wagering.tilt_max) / 2;
+    tilt = ones(size(accuracy)) * tilt_mean;
+end
+
+% Add noise (vectorized if accuracy is a vector)
+noise = randn(size(accuracy)) * CONFIG.strategy.adaptive_wagering.noise_std;
+tilt = tilt + noise;
 
 % Clip to valid range
 tilt = max(0, min(1, tilt));
@@ -419,6 +477,13 @@ end
 %% ========================================================================
 %  VISUALIZATION FUNCTIONS
 %  ========================================================================
+
+function desaturated_color = desaturate_color(color, saturation_factor)
+% Desaturate a color by blending with white
+% saturation_factor: 1.0 = full saturation, 0.5 = 50% saturation
+desaturated_color = saturation_factor * color + (1 - saturation_factor) * [1 1 1];
+desaturated_color = max(0, min(1, desaturated_color));  % Clip to valid range
+end
 
 function create_figure1_psychometric(CONFIG, accuracy_data, stats, simulation_results)
 % Figure 1: Accuracy and hit rate as function of coherence
@@ -555,21 +620,39 @@ subplot(2, 3, 6);
 hold on;
 % Use same fixed strategy indices as subplot 5
 tilt_colors = parula(length(fixed_strategy_indices));
+linear_formulation_idx = 1;  % Linear reward
+quadratic_formulation_idx = 2;  % Quadratic reward
 
 for t_idx = 1:length(fixed_strategy_indices)
     s_idx = fixed_strategy_indices(t_idx);
     tilt_val = fixed_tilt_values(t_idx);
+    base_color = tilt_colors(t_idx, :);
+    desaturated_color = desaturate_color(base_color, 0.5);
     
-    cumulative_reward = squeeze(simulation_results.cumulative_reward(s_idx, formulation_idx, :));
-    total_reward = sum(cumulative_reward);
+    % Linear reward (full saturation)
+    cumulative_reward_linear = squeeze(simulation_results.cumulative_reward(s_idx, linear_formulation_idx, :));
+    total_reward_linear = sum(cumulative_reward_linear);
     
-    plot(CONFIG.coherence_levels, cumulative_reward, '-o', 'LineWidth', 3, ...
-        'MarkerSize', 12, 'Color', tilt_colors(t_idx, :), ...
-        'MarkerFaceColor', tilt_colors(t_idx, :));
+    plot(CONFIG.coherence_levels, cumulative_reward_linear, '-o', 'LineWidth', 3, ...
+        'MarkerSize', 12, 'Color', base_color, ...
+        'MarkerFaceColor', base_color, ...
+        'DisplayName', sprintf('Tilt=%.1f (Linear)', tilt_val));
     
     xlim_current = xlim;
-    plot(xlim_current, [total_reward total_reward], '--', ...
-        'LineWidth', 2, 'Color', tilt_colors(t_idx, :));
+    plot(xlim_current, [total_reward_linear total_reward_linear], '--', ...
+        'LineWidth', 2, 'Color', base_color);
+    
+    % Quadratic reward (50% saturation)
+    cumulative_reward_quadratic = squeeze(simulation_results.cumulative_reward(s_idx, quadratic_formulation_idx, :));
+    total_reward_quadratic = sum(cumulative_reward_quadratic);
+    
+    plot(CONFIG.coherence_levels, cumulative_reward_quadratic, '-s', 'LineWidth', 3, ...
+        'MarkerSize', 10, 'Color', desaturated_color, ...
+        'MarkerFaceColor', desaturated_color, ...
+        'DisplayName', sprintf('Tilt=%.1f (Quadratic)', tilt_val));
+    
+    plot(xlim_current, [total_reward_quadratic total_reward_quadratic], '--', ...
+        'LineWidth', 2, 'Color', desaturated_color, 'LineStyle', ':');
 end
 
 xlabel('Coherence (%)', 'FontSize', 13, 'FontWeight', 'bold');
@@ -594,6 +677,7 @@ n_coherence = length(CONFIG.coherence_levels);
 % Find strategy indices
 coherence_strategy_idx = find(strcmp(simulation_results.strategy_names, 'Coherence Scaled'));
 adaptive_strategy_idx = find(strcmp(simulation_results.strategy_names, 'Adaptive Wagering'));
+accuracy_scaled_idx = find(strcmp(simulation_results.strategy_names, 'Accuracy Scaled'));
 formulation_idx = 1;  % Use first formulation (Linear)
 
 % Subplot 1: Accuracy vs Coherence
@@ -621,6 +705,10 @@ tilt_coherence = squeeze(simulation_results.mean_tilt(coherence_strategy_idx, fo
 std_tilt_coherence = squeeze(simulation_results.std_tilt(coherence_strategy_idx, formulation_idx, :));
 tilt_adaptive = squeeze(simulation_results.mean_tilt(adaptive_strategy_idx, formulation_idx, :));
 std_tilt_adaptive = squeeze(simulation_results.std_tilt(adaptive_strategy_idx, formulation_idx, :));
+if ~isempty(accuracy_scaled_idx)
+    tilt_accuracy_scaled = squeeze(simulation_results.mean_tilt(accuracy_scaled_idx, formulation_idx, :));
+    std_tilt_accuracy_scaled = squeeze(simulation_results.std_tilt(accuracy_scaled_idx, formulation_idx, :));
+end
 
 errorbar(CONFIG.coherence_levels, tilt_coherence, std_tilt_coherence, '-o', ...
     'LineWidth', 3, 'MarkerSize', 14, 'Color', [0 0.4 0.8], 'MarkerFaceColor', [0 0.4 0.8], ...
@@ -628,6 +716,11 @@ errorbar(CONFIG.coherence_levels, tilt_coherence, std_tilt_coherence, '-o', ...
 errorbar(CONFIG.coherence_levels, tilt_adaptive, std_tilt_adaptive, '-o', ...
     'LineWidth', 3, 'MarkerSize', 14, 'Color', [0.8 0.2 0.2], 'MarkerFaceColor', [0.8 0.2 0.2], ...
     'CapSize', 12, 'DisplayName', 'Adaptive wagering');
+if ~isempty(accuracy_scaled_idx)
+    errorbar(CONFIG.coherence_levels, tilt_accuracy_scaled, std_tilt_accuracy_scaled, '-o', ...
+        'LineWidth', 3, 'MarkerSize', 14, 'Color', [0 0.6 0], 'MarkerFaceColor', [0 0.6 0], ...
+        'CapSize', 12, 'DisplayName', 'Accuracy scaled');
+end
 xlabel('Coherence (%)', 'FontSize', 13, 'FontWeight', 'bold');
 ylabel('Mean Tilt (0 to 1)', 'FontSize', 13, 'FontWeight', 'bold');
 title('Mean Tilt vs Coherence (±SD)', 'FontSize', 14, 'FontWeight', 'bold');
@@ -643,12 +736,21 @@ subplot(2, 3, 3);
 hold on;
 arc_coherence = squeeze(simulation_results.mean_arc_width(coherence_strategy_idx, formulation_idx, :));
 arc_adaptive = squeeze(simulation_results.mean_arc_width(adaptive_strategy_idx, formulation_idx, :));
+if ~isempty(accuracy_scaled_idx)
+    arc_accuracy_scaled = squeeze(simulation_results.mean_arc_width(accuracy_scaled_idx, formulation_idx, :));
+end
+
 plot(CONFIG.coherence_levels, arc_coherence, '-o', ...
     'LineWidth', 3, 'MarkerSize', 14, 'Color', [0 0.4 0.8], 'MarkerFaceColor', [0 0.4 0.8], ...
     'DisplayName', 'Coherence-dependent');
 plot(CONFIG.coherence_levels, arc_adaptive, '-o', ...
     'LineWidth', 3, 'MarkerSize', 14, 'Color', [0.8 0.2 0.2], 'MarkerFaceColor', [0.8 0.2 0.2], ...
     'DisplayName', 'Adaptive wagering');
+if ~isempty(accuracy_scaled_idx)
+    plot(CONFIG.coherence_levels, arc_accuracy_scaled, '-o', ...
+        'LineWidth', 3, 'MarkerSize', 14, 'Color', [0 0.6 0], 'MarkerFaceColor', [0 0.6 0], ...
+        'DisplayName', 'Accuracy scaled');
+end
 xlabel('Coherence (%)', 'FontSize', 13, 'FontWeight', 'bold');
 ylabel('Mean Arc Width (degrees)', 'FontSize', 13, 'FontWeight', 'bold');
 title('Mean Arc Width vs Coherence', 'FontSize', 14, 'FontWeight', 'bold');
@@ -664,12 +766,21 @@ subplot(2, 3, 4);
 hold on;
 hit_coherence = squeeze(simulation_results.hit_rate(coherence_strategy_idx, formulation_idx, :));
 hit_adaptive = squeeze(simulation_results.hit_rate(adaptive_strategy_idx, formulation_idx, :));
+if ~isempty(accuracy_scaled_idx)
+    hit_accuracy_scaled = squeeze(simulation_results.hit_rate(accuracy_scaled_idx, formulation_idx, :));
+end
+
 plot(CONFIG.coherence_levels, hit_coherence, '-o', 'LineWidth', 3, ...
     'MarkerSize', 14, 'Color', [0 0.4 0.8], 'MarkerFaceColor', [0 0.4 0.8], ...
     'DisplayName', 'Coherence-dependent');
 plot(CONFIG.coherence_levels, hit_adaptive, '-o', 'LineWidth', 3, ...
     'MarkerSize', 14, 'Color', [0.8 0.2 0.2], 'MarkerFaceColor', [0.8 0.2 0.2], ...
     'DisplayName', 'Adaptive wagering');
+if ~isempty(accuracy_scaled_idx)
+    plot(CONFIG.coherence_levels, hit_accuracy_scaled, '-o', 'LineWidth', 3, ...
+        'MarkerSize', 14, 'Color', [0 0.6 0], 'MarkerFaceColor', [0 0.6 0], ...
+        'DisplayName', 'Accuracy scaled');
+end
 xlabel('Coherence (%)', 'FontSize', 13, 'FontWeight', 'bold');
 ylabel('Hit Rate (0 to 1)', 'FontSize', 13, 'FontWeight', 'bold');
 title('Hit Rate vs Coherence', 'FontSize', 14, 'FontWeight', 'bold');
@@ -683,18 +794,59 @@ hold off;
 % Subplot 5: Mean Reward per Hit vs Coherence
 subplot(2, 3, 5);
 hold on;
-reward_coherence = squeeze(simulation_results.mean_reward_per_hit(coherence_strategy_idx, formulation_idx, :));
-reward_adaptive = squeeze(simulation_results.mean_reward_per_hit(adaptive_strategy_idx, formulation_idx, :));
-plot(CONFIG.coherence_levels, reward_coherence, '-o', ...
-    'LineWidth', 3, 'MarkerSize', 14, 'Color', [0 0.4 0.8], 'MarkerFaceColor', [0 0.4 0.8], ...
-    'DisplayName', 'Coherence-dependent');
-plot(CONFIG.coherence_levels, reward_adaptive, '-o', ...
-    'LineWidth', 3, 'MarkerSize', 14, 'Color', [0.8 0.2 0.2], 'MarkerFaceColor', [0.8 0.2 0.2], ...
-    'DisplayName', 'Adaptive wagering');
+linear_formulation_idx = 1;  % Linear reward
+quadratic_formulation_idx = 2;  % Quadratic reward
+
+% Linear reward (full saturation)
+reward_coherence_linear = squeeze(simulation_results.mean_reward_per_hit(coherence_strategy_idx, linear_formulation_idx, :));
+reward_adaptive_linear = squeeze(simulation_results.mean_reward_per_hit(adaptive_strategy_idx, linear_formulation_idx, :));
+if ~isempty(accuracy_scaled_idx)
+    reward_accuracy_scaled_linear = squeeze(simulation_results.mean_reward_per_hit(accuracy_scaled_idx, linear_formulation_idx, :));
+end
+
+color_coherence = [0 0.4 0.8];
+color_adaptive = [0.8 0.2 0.2];
+color_accuracy_scaled = [0 0.6 0];
+
+plot(CONFIG.coherence_levels, reward_coherence_linear, '-o', ...
+    'LineWidth', 3, 'MarkerSize', 14, 'Color', color_coherence, 'MarkerFaceColor', color_coherence, ...
+    'DisplayName', 'Coherence-dependent (Linear)');
+plot(CONFIG.coherence_levels, reward_adaptive_linear, '-o', ...
+    'LineWidth', 3, 'MarkerSize', 14, 'Color', color_adaptive, 'MarkerFaceColor', color_adaptive, ...
+    'DisplayName', 'Adaptive wagering (Linear)');
+if ~isempty(accuracy_scaled_idx)
+    plot(CONFIG.coherence_levels, reward_accuracy_scaled_linear, '-o', ...
+        'LineWidth', 3, 'MarkerSize', 14, 'Color', color_accuracy_scaled, 'MarkerFaceColor', color_accuracy_scaled, ...
+        'DisplayName', 'Accuracy scaled (Linear)');
+end
+
+% Quadratic reward (50% saturation)
+reward_coherence_quadratic = squeeze(simulation_results.mean_reward_per_hit(coherence_strategy_idx, quadratic_formulation_idx, :));
+reward_adaptive_quadratic = squeeze(simulation_results.mean_reward_per_hit(adaptive_strategy_idx, quadratic_formulation_idx, :));
+if ~isempty(accuracy_scaled_idx)
+    reward_accuracy_scaled_quadratic = squeeze(simulation_results.mean_reward_per_hit(accuracy_scaled_idx, quadratic_formulation_idx, :));
+end
+
+color_coherence_desat = desaturate_color(color_coherence, 0.5);
+color_adaptive_desat = desaturate_color(color_adaptive, 0.5);
+color_accuracy_scaled_desat = desaturate_color(color_accuracy_scaled, 0.5);
+
+plot(CONFIG.coherence_levels, reward_coherence_quadratic, '-s', ...
+    'LineWidth', 3, 'MarkerSize', 12, 'Color', color_coherence_desat, 'MarkerFaceColor', color_coherence_desat, ...
+    'DisplayName', 'Coherence-dependent (Quadratic)');
+plot(CONFIG.coherence_levels, reward_adaptive_quadratic, '-s', ...
+    'LineWidth', 3, 'MarkerSize', 12, 'Color', color_adaptive_desat, 'MarkerFaceColor', color_adaptive_desat, ...
+    'DisplayName', 'Adaptive wagering (Quadratic)');
+if ~isempty(accuracy_scaled_idx)
+    plot(CONFIG.coherence_levels, reward_accuracy_scaled_quadratic, '-s', ...
+        'LineWidth', 3, 'MarkerSize', 12, 'Color', color_accuracy_scaled_desat, 'MarkerFaceColor', color_accuracy_scaled_desat, ...
+        'DisplayName', 'Accuracy scaled (Quadratic)');
+end
+
 xlabel('Coherence (%)', 'FontSize', 13, 'FontWeight', 'bold');
 ylabel('Mean Reward per Hit (ml)', 'FontSize', 13, 'FontWeight', 'bold');
 title('Mean Reward per Hit vs Coherence', 'FontSize', 14, 'FontWeight', 'bold');
-legend('Location', 'northwest', 'FontSize', 10, 'Box', 'off');
+legend('Location', 'northwest', 'FontSize', 9, 'Box', 'off');
 grid on;
 ylim([0 0.6]);
 set(gca, 'FontSize', 12, 'LineWidth', 1.5);
@@ -704,23 +856,77 @@ hold off;
 % Subplot 6: Cumulative Reward vs Coherence
 subplot(2, 3, 6);
 hold on;
-cum_reward_coherence = squeeze(simulation_results.cumulative_reward(coherence_strategy_idx, formulation_idx, :));
-cum_reward_adaptive = squeeze(simulation_results.cumulative_reward(adaptive_strategy_idx, formulation_idx, :));
-total_coherence = sum(cum_reward_coherence);
-total_adaptive = sum(cum_reward_adaptive);
+linear_formulation_idx = 1;  % Linear reward
+quadratic_formulation_idx = 2;  % Quadratic reward
 
-plot(CONFIG.coherence_levels, cum_reward_coherence, '-o', 'LineWidth', 3, ...
-    'MarkerSize', 14, 'Color', [0 0.4 0.8], 'MarkerFaceColor', [0 0.4 0.8], ...
-    'DisplayName', 'Coherence-dependent');
+color_coherence = [0 0.4 0.8];
+color_adaptive = [0.8 0.2 0.2];
+color_accuracy_scaled = [0 0.6 0];
+
+% Linear reward (full saturation)
+cum_reward_coherence_linear = squeeze(simulation_results.cumulative_reward(coherence_strategy_idx, linear_formulation_idx, :));
+cum_reward_adaptive_linear = squeeze(simulation_results.cumulative_reward(adaptive_strategy_idx, linear_formulation_idx, :));
+total_coherence_linear = sum(cum_reward_coherence_linear);
+total_adaptive_linear = sum(cum_reward_adaptive_linear);
+if ~isempty(accuracy_scaled_idx)
+    cum_reward_accuracy_scaled_linear = squeeze(simulation_results.cumulative_reward(accuracy_scaled_idx, linear_formulation_idx, :));
+    total_accuracy_scaled_linear = sum(cum_reward_accuracy_scaled_linear);
+end
+
+plot(CONFIG.coherence_levels, cum_reward_coherence_linear, '-o', 'LineWidth', 3, ...
+    'MarkerSize', 14, 'Color', color_coherence, 'MarkerFaceColor', color_coherence, ...
+    'DisplayName', 'Coherence-dependent (Linear)');
 xlim_current = xlim;
-plot(xlim_current, [total_coherence total_coherence], '--', ...
-    'LineWidth', 2, 'Color', [0 0.4 0.8]);
+plot(xlim_current, [total_coherence_linear total_coherence_linear], '--', ...
+    'LineWidth', 2, 'Color', color_coherence);
 
-plot(CONFIG.coherence_levels, cum_reward_adaptive, '-o', 'LineWidth', 3, ...
-    'MarkerSize', 14, 'Color', [0.8 0.2 0.2], 'MarkerFaceColor', [0.8 0.2 0.2], ...
-    'DisplayName', 'Adaptive wagering');
-plot(xlim_current, [total_adaptive total_adaptive], '--', ...
-    'LineWidth', 2, 'Color', [0.8 0.2 0.2]);
+plot(CONFIG.coherence_levels, cum_reward_adaptive_linear, '-o', 'LineWidth', 3, ...
+    'MarkerSize', 14, 'Color', color_adaptive, 'MarkerFaceColor', color_adaptive, ...
+    'DisplayName', 'Adaptive wagering (Linear)');
+plot(xlim_current, [total_adaptive_linear total_adaptive_linear], '--', ...
+    'LineWidth', 2, 'Color', color_adaptive);
+
+if ~isempty(accuracy_scaled_idx)
+    plot(CONFIG.coherence_levels, cum_reward_accuracy_scaled_linear, '-o', 'LineWidth', 3, ...
+        'MarkerSize', 14, 'Color', color_accuracy_scaled, 'MarkerFaceColor', color_accuracy_scaled, ...
+        'DisplayName', 'Accuracy scaled (Linear)');
+    plot(xlim_current, [total_accuracy_scaled_linear total_accuracy_scaled_linear], '--', ...
+        'LineWidth', 2, 'Color', color_accuracy_scaled);
+end
+
+% Quadratic reward (50% saturation)
+cum_reward_coherence_quadratic = squeeze(simulation_results.cumulative_reward(coherence_strategy_idx, quadratic_formulation_idx, :));
+cum_reward_adaptive_quadratic = squeeze(simulation_results.cumulative_reward(adaptive_strategy_idx, quadratic_formulation_idx, :));
+total_coherence_quadratic = sum(cum_reward_coherence_quadratic);
+total_adaptive_quadratic = sum(cum_reward_adaptive_quadratic);
+if ~isempty(accuracy_scaled_idx)
+    cum_reward_accuracy_scaled_quadratic = squeeze(simulation_results.cumulative_reward(accuracy_scaled_idx, quadratic_formulation_idx, :));
+    total_accuracy_scaled_quadratic = sum(cum_reward_accuracy_scaled_quadratic);
+end
+
+color_coherence_desat = desaturate_color(color_coherence, 0.5);
+color_adaptive_desat = desaturate_color(color_adaptive, 0.5);
+color_accuracy_scaled_desat = desaturate_color(color_accuracy_scaled, 0.5);
+
+plot(CONFIG.coherence_levels, cum_reward_coherence_quadratic, '-s', 'LineWidth', 3, ...
+    'MarkerSize', 12, 'Color', color_coherence_desat, 'MarkerFaceColor', color_coherence_desat, ...
+    'DisplayName', 'Coherence-dependent (Quadratic)');
+plot(xlim_current, [total_coherence_quadratic total_coherence_quadratic], ':', ...
+    'LineWidth', 2, 'Color', color_coherence_desat);
+
+plot(CONFIG.coherence_levels, cum_reward_adaptive_quadratic, '-s', 'LineWidth', 3, ...
+    'MarkerSize', 12, 'Color', color_adaptive_desat, 'MarkerFaceColor', color_adaptive_desat, ...
+    'DisplayName', 'Adaptive wagering (Quadratic)');
+plot(xlim_current, [total_adaptive_quadratic total_adaptive_quadratic], ':', ...
+    'LineWidth', 2, 'Color', color_adaptive_desat);
+
+if ~isempty(accuracy_scaled_idx)
+    plot(CONFIG.coherence_levels, cum_reward_accuracy_scaled_quadratic, '-s', 'LineWidth', 3, ...
+        'MarkerSize', 12, 'Color', color_accuracy_scaled_desat, 'MarkerFaceColor', color_accuracy_scaled_desat, ...
+        'DisplayName', 'Accuracy scaled (Quadratic)');
+    plot(xlim_current, [total_accuracy_scaled_quadratic total_accuracy_scaled_quadratic], ':', ...
+        'LineWidth', 2, 'Color', color_accuracy_scaled_desat);
+end
 
 xlabel('Coherence (%)', 'FontSize', 13, 'FontWeight', 'bold');
 ylabel('Cumulative Reward (ml)', 'FontSize', 13, 'FontWeight', 'bold');
@@ -832,5 +1038,65 @@ for i = 1:n_coherence
     box on;
     hold off;
 end
+
+end
+
+function create_figure4_reward_functions(CONFIG)
+% Figure 4: Reward functions showing how reward scales with tilt
+
+fig = figure('Name', 'Reward Functions', 'Position', [100 100 1200 600]);
+sgtitle('CPR Task: Reward Functions', ...
+    'FontSize', 18, 'FontWeight', 'bold', 'Color', [0 0.3 0.6]);
+
+% Tilt range
+tilt_range = 0:0.01:1;
+
+% Calculate rewards for both formulations (assuming hit=1)
+reward_linear = scale_reward(tilt_range, CONFIG);
+reward_quadratic = scale_reward(tilt_range.^2, CONFIG);
+
+% Color for linear (full saturation)
+color_linear = [0 0.4 0.8];
+% Color for quadratic (50% saturation)
+color_quadratic = desaturate_color(color_linear, 0.5);
+
+% Subplot 1: Reward vs Tilt
+subplot(1, 2, 1);
+hold on;
+plot(tilt_range, reward_linear, '-', 'LineWidth', 4, ...
+    'Color', color_linear, 'DisplayName', 'Linear: R(t) = R_{min} + (R_{max} - R_{min}) \cdot t');
+plot(tilt_range, reward_quadratic, '-', 'LineWidth', 4, ...
+    'Color', color_quadratic, 'DisplayName', 'Quadratic: R(t) = R_{min} + (R_{max} - R_{min}) \cdot t^2');
+xlabel('Tilt (Confidence)', 'FontSize', 13, 'FontWeight', 'bold');
+ylabel('Reward per Hit (ml)', 'FontSize', 13, 'FontWeight', 'bold');
+title('Reward vs Tilt', 'FontSize', 14, 'FontWeight', 'bold');
+legend('Location', 'northwest', 'FontSize', 11, 'Box', 'off');
+grid on;
+xlim([0 1]);
+ylim([CONFIG.reward_min_ml CONFIG.reward_max_ml * 1.05]);
+set(gca, 'FontSize', 12, 'LineWidth', 1.5);
+box on;
+hold off;
+
+% Subplot 2: Normalized Reward vs Tilt (showing the scaling factor)
+subplot(1, 2, 2);
+hold on;
+normalized_linear = tilt_range;  % Linear scaling
+normalized_quadratic = tilt_range.^2;  % Quadratic scaling
+
+plot(tilt_range, normalized_linear, '-', 'LineWidth', 4, ...
+    'Color', color_linear, 'DisplayName', 'Linear: f(t) = t');
+plot(tilt_range, normalized_quadratic, '-', 'LineWidth', 4, ...
+    'Color', color_quadratic, 'DisplayName', 'Quadratic: f(t) = t^2');
+xlabel('Tilt (Confidence)', 'FontSize', 13, 'FontWeight', 'bold');
+ylabel('Normalized Scaling Factor', 'FontSize', 13, 'FontWeight', 'bold');
+title('Reward Scaling Factor vs Tilt', 'FontSize', 14, 'FontWeight', 'bold');
+legend('Location', 'northwest', 'FontSize', 11, 'Box', 'off');
+grid on;
+xlim([0 1]);
+ylim([0 1.05]);
+set(gca, 'FontSize', 12, 'LineWidth', 1.5);
+box on;
+hold off;
 
 end
